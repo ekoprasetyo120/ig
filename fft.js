@@ -5,7 +5,9 @@ const _ = require('lodash');
 const rp = require('request-promise');
 const S = require('string');
 const inquirer = require('inquirer');
-
+var fs = require('fs'),
+    request = require('request');
+	
 const User = [
 {
   type:'input',
@@ -37,17 +39,8 @@ const User = [
 },
 {
   type:'input',
-  name:'text',
-  message:'[>] Insert Text Comment (Use [|] if more than 1):',
-  validate: function(value){
-    if(!value) return 'Can\'t Empty';
-    return true;
-  }
-},
-{
-  type:'input',
-  name:'mysyntx',
-  message:'[>] Input Total of Target You Want (ITTYW):',
+  name:'accountsPerDelay',
+  message:'[>] Number of Accounts per Delay:',
   validate: function(value){
     value = value.match(/[0-9]/);
     if (value) return true;
@@ -57,7 +50,7 @@ const User = [
 {
   type:'input',
   name:'sleep',
-  message:'[>] Insert Sleep (MiliSeconds):',
+  message:'[>] Insert Sleep/Delay (MiliSeconds):',
   validate: function(value){
     value = value.match(/[0-9]/);
     if (value) return true;
@@ -67,11 +60,9 @@ const User = [
 ]
 
 const Login = async function(User){
-
   const Device = new Client.Device(User.username);
   const Storage = new Client.CookieMemoryStorage();
   const session = new Client.Session(Device, Storage);
-
   try {
     await Client.Session.create(Device, Storage, User.username, User.password)
     const account = await session.getAccount();
@@ -79,7 +70,6 @@ const Login = async function(User){
   } catch (err) {
     return Promise.reject(err);
   }
-
 }
 
 const Target = async function(username){
@@ -177,7 +167,7 @@ const Followers = async function(session, id){
   }
 }
 
-const Excute = async function(User, TargetUsername, Text, Sleep, mysyntx){
+const Excute = async function(User, TargetUsername, Sleep, accountsPerDelay){
   try {
     console.log(chalk`{yellow \n [?] Try to Login . . .}`)
     const doLogin = await Login(User);
@@ -191,12 +181,13 @@ const Excute = async function(User, TargetUsername, Text, Sleep, mysyntx){
     do {
       if (TargetCursor) Targetfeed.setCursor(TargetCursor);
       var TargetResult = await Targetfeed.get();
-      TargetResult = _.chunk(TargetResult, mysyntx);
+      TargetResult = _.chunk(TargetResult, accountsPerDelay);
       for (let i = 0; i < TargetResult.length; i++) {
         var timeNow = new Date();
         timeNow = `${timeNow.getHours()}:${timeNow.getMinutes()}:${timeNow.getSeconds()}`
         await Promise.all(TargetResult[i].map(async(akun) => {
           if (!getFollowers.includes(akun.id) && akun.params.isPrivate === false) {
+	    var Text = fs.readFileSync('komen.txt', 'utf8').split('|');
             var ranText = Text[Math.floor(Math.random() * Text.length)];
             const ngeDo = await CommentAndLike(doLogin.session, akun.id, ranText)
             console.log(chalk`[{magenta ${timeNow}}] {bold.green [>]}${akun.params.username} => ${ngeDo}`)
@@ -204,12 +195,10 @@ const Excute = async function(User, TargetUsername, Text, Sleep, mysyntx){
             console.log(chalk`[{magenta ${timeNow}}] {bold.yellow [SKIP]}${akun.params.username} => PRIVATE OR ALREADY FOLLOWED`)
           }
         }));
-        console.log(chalk`{yellow \n [#][>] Delay For ${Sleep} MiliSeconds [<][#] \n}`);
+        console.log(chalk`{yellow \n [#][>][{cyan Account: ${User.username}}][{cyan Target: @${TargetUsername}}] Delay For ${Sleep} MiliSeconds [<][#] \n}`);
         await delay(Sleep);
       }
       TargetCursor = await Targetfeed.getCursor();
-      console.log(chalk`{yellow \n [#][>] Delay For ${Sleep} MiliSeconds [<][#] \n}`);
-      await delay(Sleep);
     } while(Targetfeed.isMoreAvailable());
   } catch (err) {
     console.log(err);
@@ -227,17 +216,13 @@ console.log(chalk`
   [✓] FIXING & TESTING BY SYNTAX (@officialputu_id)
   [✓] CCOCOT.CO | BC0DE.NET | NAONLAH.NET | WingkoColi
   [✓] SGB TEAM REBORN | Zerobyte.id | ccocot@bc0de.net 
-  —————————————————————————————————————————————————————
-  What's new?
-  1. Input Target/delay Manual (ITTYW)
   —————————————————————————————————————————————————————}
       `);
 
 inquirer.prompt(User)
 .then(answers => {
-  var text = answers.text.split('|');
   Excute({
     username:answers.username,
     password:answers.password
-  },answers.target,text,answers.sleep,answers.mysyntx);
+  },answers.target,answers.sleep,answers.accountsPerDelay);
 })
